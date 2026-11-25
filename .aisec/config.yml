@@ -1,0 +1,107 @@
+version: 1
+app:
+  root: .
+  language: python
+  build:
+    dockerfile: Dockerfile
+    install: ["uv sync --frozen"]
+  start:
+    command: "sh -c 'python -m ledgerly.seed --if-empty && gunicorn -b 0.0.0.0:8000 -w 1 --threads 8 --timeout 120 ledgerly.wsgi:app'"
+    port: 8000
+    env:
+      APP_ENV: test
+      WORKER_MODE: thread
+      OPENAI_MODEL: gpt-6-luna
+  health: { path: /healthz, expectStatus: 200, timeoutS: 120 }
+  isolation: reuse
+
+# Primary conversational surface: the finance copilot
+interface:
+  type: http
+  http:
+    method: POST
+    path: /api/copilot/chat
+    body: { message: "{{input}}", session_id: "{{session}}" }
+    response:
+      text: "$.reply"
+      html: "$.reply_html"
+
+# All AI services exposed by the app (same auth for every endpoint)
+services:
+  - name: finance-copilot
+    kind: chatbot
+    method: POST
+    path: /api/copilot/chat
+    body: { message: "{{input}}", session_id: "{{session}}" }
+    response: { text: "$.reply", html: "$.reply_html" }
+  - name: transaction-categorizer
+    kind: batch-classifier
+    notes: "Create a transaction (POST /api/transactions, description = attacker text), then run the job and poll status_url."
+    setup:
+      method: POST
+      path: /api/transactions
+      body: { posted_at: "2026-11-20", description: "{{input}}", amount_cents: -1999 }
+    method: POST
+    path: /api/categorizer/run
+    body: { only_uncategorized: true }
+    response: { text: "$.status_url" }
+  - name: document-ingestion-upload
+    kind: ingestion
+    method: POST
+    path: /api/documents/upload
+    contentType: multipart/form-data
+    body: { file: "{{file}}" }
+    response: { text: "$.fields" }
+  - name: document-ingestion-url
+    kind: ingestion
+    method: POST
+    path: /api/documents/from-url
+    body: { url: "{{url}}" }
+    response: { text: "$.preview" }
+  - name: document-qa
+    kind: rag
+    method: POST
+    path: /api/documents/ask
+    body: { question: "{{input}}" }
+    response: { text: "$.answer", html: "$.answer_html" }
+  - name: fraud-sentinel-agent
+    kind: agent
+    method: POST
+    path: /api/fraud/explain
+    body: { message: "{{input}}" }
+    response: { text: "$.explanation" }
+  - name: monthly-report
+    kind: generator
+    method: POST
+    path: /api/reports/monthly
+    body: { month: "2026-10", focus: "{{input}}" }
+    response: { text: "$.narrative" }
+    followUp: { method: GET, path: "$.html_url", response: { html: body } }
+
+identity:
+  mode: header
+  header: { name: Authorization, value: "Bearer {{identity.token}}" }
+  identities:
+    - id: brightside-owner
+      tenant: brightside-bakery
+      role: owner
+      token: lgr_test_brightside_owner_4f9a1c
+    - id: northwind-owner
+      tenant: northwind-landscaping
+      role: owner
+      token: lgr_test_northwind_owner_9d4b2e
+    - id: brightside-employee
+      tenant: brightside-bakery
+      role: employee
+      token: lgr_test_brightside_employee_3c6f0a
+    - id: northwind-accountant
+      tenant: northwind-landscaping
+      role: accountant
+      token: lgr_test_northwind_accountant_1a7c5f
+  whoami: { method: GET, path: /api/me }
+
+fixtures:
+  seedCommand: "python -m ledgerly.seed"
+  corpusDir: data/uploads
+providers: [openai]
+budget: { usd: 3 }

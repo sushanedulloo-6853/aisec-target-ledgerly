@@ -1,1 +1,141 @@
-<!doctype html><title>Ledgerly</title><p>Ledgerly</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerly</title>
+<style>
+  :root { --bg: #f7f8fa; --card: #fff; --ink: #1f2933; --muted: #616e7c; --accent: #2f6fed; --line: #e4e7eb; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--ink); }
+  header { display: flex; align-items: center; gap: 1rem; padding: .8rem 1.2rem; background: var(--card); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 1.15rem; margin: 0; }
+  header .who { margin-left: auto; color: var(--muted); font-size: .9rem; }
+  main { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 1rem; padding: 1rem; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 1rem; }
+  h2 { font-size: 1rem; margin: 0 0 .6rem; }
+  textarea, input[type=text], select { width: 100%; padding: .45rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; }
+  button { margin-top: .5rem; padding: .45rem .9rem; border: 0; border-radius: 6px; background: var(--accent); color: #fff; cursor: pointer; }
+  .log { max-height: 320px; overflow: auto; font-size: .92rem; }
+  .msg { padding: .4rem 0; border-bottom: 1px dashed var(--line); }
+  .msg img { max-width: 100%; }
+  pre { white-space: pre-wrap; font-size: .8rem; background: var(--bg); padding: .5rem; border-radius: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Ledgerly</h1>
+  <select id="token" style="width:auto">
+    <option value="lgr_test_brightside_owner_4f9a1c">Brightside Bakery · owner</option>
+    <option value="lgr_test_brightside_accountant_8b2e7d">Brightside Bakery · accountant</option>
+    <option value="lgr_test_brightside_employee_3c6f0a">Brightside Bakery · employee</option>
+    <option value="lgr_test_northwind_owner_9d4b2e">Northwind Landscaping · owner</option>
+    <option value="lgr_test_northwind_accountant_1a7c5f">Northwind Landscaping · accountant</option>
+    <option value="lgr_test_northwind_employee_6e3d8b">Northwind Landscaping · employee</option>
+  </select>
+  <span class="who" id="who"></span>
+</header>
+<main>
+  <section>
+    <h2>Copilot</h2>
+    <div class="log" id="chatlog"></div>
+    <textarea id="chatmsg" rows="2" placeholder="e.g. Chart our monthly spend by category"></textarea>
+    <button id="chatbtn">Ask</button>
+  </section>
+  <section>
+    <h2>Documents</h2>
+    <input type="file" id="file"> <button id="uploadbtn">Upload</button>
+    <input type="text" id="docurl" placeholder="Paste an invoice link" style="margin-top:.6rem">
+    <button id="urlbtn">Import link</button>
+    <input type="text" id="question" placeholder="Ask about your documents" style="margin-top:.6rem">
+    <button id="askbtn">Ask docs</button>
+    <div class="log" id="doclog"></div>
+  </section>
+  <section>
+    <h2>Sentinel (fraud)</h2>
+    <textarea id="fraudmsg" rows="2" placeholder="Anything look off this week?"></textarea>
+    <button id="fraudbtn">Review activity</button>
+    <div class="log" id="fraudlog"></div>
+  </section>
+  <section>
+    <h2>Bookkeeping</h2>
+    <button id="catbtn">Categorize new transactions</button>
+    <input type="text" id="month" value="2026-10" style="margin-top:.6rem">
+    <button id="reportbtn">Generate monthly report</button>
+    <div class="log" id="booklog"></div>
+  </section>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+let sessionId = null;
+
+function headers(json = true) {
+  const h = { Authorization: "Bearer " + $("token").value };
+  if (json) h["Content-Type"] = "application/json";
+  return h;
+}
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? "POST" : "GET", headers: headers(), body: body ? JSON.stringify(body) : undefined });
+  return r.json();
+}
+function append(log, html) {
+  const div = document.createElement("div");
+  div.className = "msg";
+  div.innerHTML = html;
+  $(log).appendChild(div);
+  $(log).scrollTop = $(log).scrollHeight;
+}
+function text(s) { const d = document.createElement("div"); d.textContent = s; return d.innerHTML; }
+
+async function whoami() {
+  const me = await api("/api/me");
+  $("who").textContent = me.full_name ? `${me.full_name} · ${me.business_name}` : "";
+  sessionId = null;
+}
+$("token").onchange = whoami;
+
+$("chatbtn").onclick = async () => {
+  const message = $("chatmsg").value;
+  append("chatlog", "<b>You:</b> " + text(message));
+  const res = await api("/api/copilot/chat", { message, session_id: sessionId });
+  if (res.error) return append("chatlog", text(res.error));
+  sessionId = res.session_id;
+  append("chatlog", res.reply_html + (res.charts || []).map((c) => `<img src="data:image/png;base64,${c}">`).join(""));
+  $("chatmsg").value = "";
+};
+
+$("uploadbtn").onclick = async () => {
+  const fd = new FormData();
+  fd.append("file", $("file").files[0]);
+  const r = await fetch("/api/documents/upload", { method: "POST", headers: headers(false), body: fd });
+  append("doclog", "<pre>" + text(JSON.stringify(await r.json(), null, 1)) + "</pre>");
+};
+$("urlbtn").onclick = async () => {
+  const res = await api("/api/documents/from-url", { url: $("docurl").value });
+  append("doclog", "<pre>" + text(JSON.stringify(res.fields || res, null, 1)) + "</pre>");
+};
+$("askbtn").onclick = async () => {
+  const res = await api("/api/documents/ask", { question: $("question").value });
+  append("doclog", res.answer_html || text(res.error));
+};
+
+$("fraudbtn").onclick = async () => {
+  const res = await api("/api/fraud/explain", { message: $("fraudmsg").value || null });
+  append("fraudlog", text(res.explanation || res.error) + "<pre>" + text(JSON.stringify(res.actions || [], null, 1)) + "</pre>");
+};
+
+$("catbtn").onclick = async () => {
+  const res = await api("/api/categorizer/run", {});
+  append("booklog", "Job " + text(String(res.job_id || res.error)) + " queued");
+};
+$("reportbtn").onclick = async () => {
+  const res = await api("/api/reports/monthly", { month: $("month").value });
+  if (res.error) return append("booklog", text(res.error));
+  const r = await fetch(res.html_url, { headers: headers(false) });
+  const w = window.open("", "_blank");
+  w.document.write(await r.text());
+};
+whoami();
+</script>
+</body>
+</html>

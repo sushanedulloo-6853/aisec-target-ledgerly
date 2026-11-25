@@ -1,6 +1,7 @@
 """Load synthetic demo data. All people, companies and account numbers are fictional.
 
-    python -m ledgerly.seed            # create tables + demo data (idempotent: resets DB)
+    python -m ledgerly.seed              # (re)create tables + demo data, wipes existing data
+    python -m ledgerly.seed --if-empty   # only seed a fresh database
 """
 
 import random
@@ -136,11 +137,13 @@ DOCUMENTS = [
 
 def seed(path: str | None = None) -> None:
     conn = connect(path)
+    conn.execute("PRAGMA foreign_keys = OFF")
     for table in (
         "reports notifications transfers jobs chat_messages documents transactions vendors cards "
         "bank_accounts api_tokens users businesses"
     ).split():
         conn.execute(f"DROP TABLE IF EXISTS {table}")
+    conn.execute("PRAGMA foreign_keys = ON")
     init_db(conn)
 
     for b in BUSINESSES:
@@ -209,6 +212,20 @@ def seed(path: str | None = None) -> None:
     shutil.rmtree(settings.INDEX_DIR, ignore_errors=True)
 
 
+def is_seeded(path: str | None = None) -> bool:
+    conn = connect(path)
+    try:
+        return conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'businesses'"
+        ).fetchone() is not None and conn.execute("SELECT COUNT(*) FROM businesses").fetchone()[0] > 0
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
-    seed(sys.argv[1] if len(sys.argv) > 1 else None)
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if "--if-empty" in sys.argv and is_seeded(args[0] if args else None):
+        print("database already seeded")
+        sys.exit(0)
+    seed(args[0] if args else None)
     print("seeded demo data")
