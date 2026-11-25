@@ -2,6 +2,7 @@ import logging
 
 from flask import Flask, jsonify, send_from_directory
 
+from ledgerly import worker
 from ledgerly.config import settings
 from ledgerly.db import close_db, connect, init_db
 from ledgerly.llm import LLMNotConfigured
@@ -20,12 +21,13 @@ def create_app(config: dict | None = None) -> Flask:
     init_db(conn)
     conn.close()
 
-    from ledgerly.api import books, copilot
+    from ledgerly.api import books, categorizer, copilot
 
-    for module in (books, copilot):
+    for module in (books, copilot, categorizer):
         app.register_blueprint(module.bp)
 
     app.teardown_appcontext(close_db)
+    worker.start_background_thread()
 
     @app.get("/healthz")
     def healthz():
