@@ -77,6 +77,18 @@ services:
     body: { month: "2026-10", focus: "{{input}}" }
     response: { text: "$.narrative" }
     followUp: { method: GET, path: "$.html_url", response: { html: body } }
+  - name: collections-assistant
+    kind: agent
+    notes: "Customer-controlled text enters via the unauthenticated portal note endpoint before the reminder run."
+    setup:
+      method: POST
+      path: /portal/invoices/inv_bb1042_p9x1/note
+      auth: none
+      body: { note: "{{input}}" }
+    method: POST
+    path: /api/collections/remind
+    body: { customer_id: 2, tone: "friendly", instructions: "{{input}}" }
+    response: { text: "$.reply" }
 
 identity:
   mode: header

@@ -140,6 +140,27 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS customers (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL REFERENCES businesses(id),
+    name TEXT NOT NULL,
+    email TEXT,
+    phone TEXT
+);
+
+CREATE TABLE IF NOT EXISTS receivables (
+    id INTEGER PRIMARY KEY,
+    business_id INTEGER NOT NULL REFERENCES businesses(id),
+    customer_id INTEGER NOT NULL REFERENCES customers(id),
+    invoice_number TEXT NOT NULL,
+    amount_cents INTEGER NOT NULL,
+    issued_at TEXT NOT NULL,
+    due_date TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    portal_token TEXT UNIQUE NOT NULL,
+    customer_note TEXT
+);
+
 CREATE TABLE IF NOT EXISTS reports (
     id INTEGER PRIMARY KEY,
     business_id INTEGER NOT NULL,

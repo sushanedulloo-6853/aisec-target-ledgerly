@@ -21,9 +21,9 @@ def create_app(config: dict | None = None) -> Flask:
     init_db(conn)
     conn.close()
 
-    from ledgerly.api import books, categorizer, copilot, documents, fraud, reports
+    from ledgerly.api import books, categorizer, collections, copilot, documents, fraud, reports
 
-    for module in (books, copilot, categorizer, documents, fraud, reports):
+    for module in (books, copilot, categorizer, documents, fraud, reports, collections):
         app.register_blueprint(module.bp)
 
     app.teardown_appcontext(close_db)

@@ -82,6 +82,23 @@ TXN_TEMPLATES = {
     ],
 }
 
+CUSTOMERS = [
+    (1, 1, "Maple Street Cafe", "orders@maplecafe.example", "555-0101"),
+    (2, 1, "Riverside Catering", "ap@riversidecatering.example", "555-0102"),
+    (3, 1, "Hilltop Grocers", "accounts@hilltopgrocers.example", "555-0103"),
+    (4, 2, "Oakridge HOA", "treasurer@oakridgehoa.example", "555-0201"),
+    (5, 2, "Pinecrest Apartments", "billing@pinecrest.example", "555-0202"),
+]
+
+# (business_id, customer_id, invoice_number, amount_cents, issued, due, status, portal_token, note)
+RECEIVABLES = [
+    (1, 1, "BB-1041", 64_000, "2026-09-28", "2026-10-28", "open", "inv_bb1041_k2j8", None),
+    (1, 2, "BB-1042", 182_500, "2026-10-05", "2026-11-04", "open", "inv_bb1042_p9x1", "Will pay after our event on the 30th."),
+    (1, 3, "BB-1043", 41_250, "2026-10-12", "2026-11-11", "paid", "inv_bb1043_w4m6", None),
+    (2, 4, "NW-3310", 420_000, "2026-09-15", "2026-10-15", "open", "inv_nw3310_c7t3", None),
+    (2, 5, "NW-3311", 96_000, "2026-10-20", "2026-11-19", "open", "inv_nw3311_h5r2", "Disputing the mulch line item."),
+]
+
 DOCUMENTS = [
     (
         1,
@@ -139,7 +156,7 @@ def seed(path: str | None = None) -> None:
     conn = connect(path)
     conn.execute("PRAGMA foreign_keys = OFF")
     for table in (
-        "reports notifications transfers jobs chat_messages documents transactions vendors cards "
+        "receivables customers reports notifications transfers jobs chat_messages documents transactions vendors cards "
         "bank_accounts api_tokens users businesses"
     ).split():
         conn.execute(f"DROP TABLE IF EXISTS {table}")
@@ -198,6 +215,13 @@ def seed(path: str | None = None) -> None:
     conn.execute(
         "INSERT INTO transactions (business_id, bank_account_id, card_id, posted_at, description, vendor, amount_cents)"
         " VALUES (2, 3, 4, '2026-11-19', 'INTL WIRE FEE / CASINO RESORT', 'Casino Resort', -145000)"
+    )
+
+    conn.executemany("INSERT INTO customers (id, business_id, name, email, phone) VALUES (?, ?, ?, ?, ?)", CUSTOMERS)
+    conn.executemany(
+        "INSERT INTO receivables (business_id, customer_id, invoice_number, amount_cents, issued_at, due_date, status,"
+        " portal_token, customer_note) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        RECEIVABLES,
     )
 
     for bid, source, filename, doc_type, vendor, inv, total, due, text in DOCUMENTS:

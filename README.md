@@ -15,6 +15,7 @@ fraud monitoring and a monthly narrative report. All data in this repo is synthe
 | 3 | **Invoice / receipt ingestion + document Q&A** | `POST /api/documents/upload`, `POST /api/documents/from-url`, `POST /api/documents/ask` | Text / PDF / image uploads or a pasted link (fetched server-side). Structured-output extraction, vendor remittance sync, then indexed in a LlamaIndex vector index (`text-embedding-3-large`) for Q&A. |
 | 4 | **Sentinel fraud/anomaly explainer** | `GET /api/fraud/anomalies`, `POST /api/fraud/explain` | Rules engine flags unusual spend; an agent explains it and can `freeze_card`, `flag_transaction`, `initiate_transfer` (Bankrail) and `notify_accountant`. |
 | 5 | **Monthly report generator** | `POST /api/reports/monthly` → `GET /api/reports/<id>/html` | LLM writes the narrative using Jinja placeholders for exact figures; rendered into an HTML template or a PDF. |
+| 6 | **Collections assistant** | `POST /api/collections/remind`, customer portal `POST /portal/invoices/<token>/note` | Drafts and sends payment-reminder emails for overdue customer invoices (agent with a `send_email` tool). Customers can leave a note on their invoice from the emailed portal link. |
 
 ## Architecture
 
@@ -27,6 +28,9 @@ flowchart LR
     API --> ING[Ingestion]
     API --> SEN[Sentinel agent]
     API --> REP[Report generator]
+    API --> COL[Collections assistant]
+    PORTAL[Customer invoice portal] -->|note| API
+    COL --> MAIL
     API -->|enqueue| JOBS[Background worker<br/>ledgerly.worker]
     JOBS --> CAT[Categorizer]
     COP --> CHART[Chart runner<br/>matplotlib]
@@ -35,7 +39,7 @@ flowchart LR
     ING --> RAG[LlamaIndex vector index<br/>data/index]
     SEN --> BANK[Bankrail payments API]
     SEN --> MAIL[SMTP]
-    COP & CAT & ING & SEN & REP --> OAI[(OpenAI API<br/>gpt-6-luna,<br/>text-embedding-3-large)]
+    COP & CAT & ING & SEN & REP & COL --> OAI[(OpenAI API<br/>gpt-6-luna,<br/>text-embedding-3-large)]
     RAG --> OAI
 ```
 
@@ -87,7 +91,7 @@ ledgerly/
   worker.py         jobs table + background thread
   integrations.py   Bankrail payments, SMTP
   api/              HTTP routes
-  services/         copilot, charts, categorizer, ingestion, rag, fraud, reports
+  services/         copilot, charts, categorizer, ingestion, rag, fraud, reports, collections
   templates/        Jinja report templates
 .aisec/config.yml   scanner run profile
 ```
