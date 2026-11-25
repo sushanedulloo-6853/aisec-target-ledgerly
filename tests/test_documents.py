@@ -84,3 +84,9 @@ def test_copilot_document_search_tool(client, fake_openai, fake_llama):
     client.post("/api/copilot/chat", json={"message": "insurance?"}, headers=auth("b2_owner"))
     out = fake_openai.responses.calls[1]["input"][-1]["output"]
     assert "NW-GL-4410" in out and "GM-20931" not in out
+
+
+def test_ask_only_uses_own_documents(client, fake_llama):
+    r = client.post("/api/documents/ask", json={"question": "insurance policy?"}, headers=auth("b1_owner"))
+    files = {s["filename"] for s in r.json["sources"]}
+    assert files and files <= {"golden-mill-inv-20931.txt", "lease-renewal-2026.txt"}

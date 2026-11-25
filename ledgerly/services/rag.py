@@ -78,11 +78,12 @@ def add_document(row) -> None:
         _persist()
 
 
+def _tenant_filter(business_id: int) -> MetadataFilters:
+    return MetadataFilters(filters=[ExactMatchFilter(key="business_id", value=business_id)])
+
+
 def search(business_id: int, query: str, top_k: int = 4) -> list[dict]:
-    retriever = get_index().as_retriever(
-        similarity_top_k=top_k,
-        filters=MetadataFilters(filters=[ExactMatchFilter(key="business_id", value=business_id)]),
-    )
+    retriever = get_index().as_retriever(similarity_top_k=top_k, filters=_tenant_filter(business_id))
     return [
         {"document_id": n.metadata.get("document_id"), "filename": n.metadata.get("filename"), "text": n.get_content()}
         for n in retriever.retrieve(query)
@@ -93,6 +94,7 @@ def ask(business_id: int, business_name: str, question: str) -> dict:
     engine = get_index().as_query_engine(
         llm=llm.get_llama_llm(),
         similarity_top_k=4,
+        filters=_tenant_filter(business_id),
         text_qa_template=QA_PROMPT.partial_format(business_name=business_name),
     )
     result = engine.query(question)
