@@ -4,10 +4,12 @@
 """
 
 import random
+import shutil
 import sys
 from datetime import date, timedelta
 
 from ledgerly.auth import hash_token
+from ledgerly.config import settings
 from ledgerly.db import connect, init_db
 
 BUSINESSES = [
@@ -203,6 +205,8 @@ def seed(path: str | None = None) -> None:
         )
     conn.commit()
     conn.close()
+    # documents are re-embedded lazily on first search
+    shutil.rmtree(settings.INDEX_DIR, ignore_errors=True)
 
 
 if __name__ == "__main__":

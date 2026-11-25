@@ -69,6 +69,9 @@ def app(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "WORKER_MODE", "inline")
     seed(settings.DATABASE_PATH)
     ratelimit.reset()
+    from ledgerly.services import rag
+
+    rag.reset_index()
     from ledgerly.app import create_app
 
     application = create_app({"TESTING": True})
@@ -87,3 +90,12 @@ def db():
     conn = connect(settings.DATABASE_PATH)
     yield conn
     conn.close()
+
+
+@pytest.fixture
+def fake_llama(monkeypatch):
+    from llama_index.core.embeddings import MockEmbedding
+    from llama_index.core.llms import MockLLM
+
+    monkeypatch.setattr(llm, "get_embed_model", lambda: MockEmbedding(embed_dim=8))
+    monkeypatch.setattr(llm, "get_llama_llm", lambda: MockLLM(max_tokens=16))

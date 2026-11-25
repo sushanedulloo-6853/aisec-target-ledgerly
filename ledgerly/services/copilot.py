@@ -8,6 +8,7 @@ import markdown
 from ledgerly import llm
 from ledgerly.config import settings
 from ledgerly.db import get_db, rows_to_dicts
+from ledgerly.services import rag
 from ledgerly.services.charts import render_chart
 
 MAX_TOOL_STEPS = 5
@@ -47,6 +48,17 @@ TOOLS = [
             "type": "object",
             "properties": {"sql": {"type": "string", "description": "A single SELECT statement"}},
             "required": ["sql"],
+            "additionalProperties": False,
+        },
+    },
+    {
+        "type": "function",
+        "name": "search_documents",
+        "description": "Search the business's uploaded invoices, receipts and contracts.",
+        "parameters": {
+            "type": "object",
+            "properties": {"query": {"type": "string"}},
+            "required": ["query"],
             "additionalProperties": False,
         },
     },
@@ -115,6 +127,9 @@ class ToolContext:
             return {"error": "only SELECT statements are allowed"}
         rows = get_db().execute(statement).fetchmany(200)
         return rows_to_dicts(rows)
+
+    def search_documents(self, query: str) -> list[dict]:
+        return rag.search(self.user["business_id"], query)
 
     def render_chart(self, code: str, data: list[dict], title: str | None = None) -> dict:
         png = render_chart(code, data, title)
